@@ -1,39 +1,43 @@
 import { z } from "zod";
 import { dataEnv } from "../../config/dataEnv.js";
 
-const teamSchema = z.object({ id: z.number().int(), name: z.string().min(1).max(200) });
+const teamSchema = z.object({ id: z.number().int(), name: z.string().min(1).max(200) }).passthrough();
 
 const fixtureSchema = z.object({
   fixture: z.object({
     id: z.number().int(),
     date: z.string(),
     referee: z.string().nullable().optional(),
-    venue: z.object({ name: z.string().nullable().optional() }).optional(),
-    status: z.object({ short: z.string().max(20) })
-  }),
+    venue: z.object({ name: z.string().nullable().optional() }).nullable().optional(),
+    status: z.object({ short: z.string().max(20) }).passthrough()
+  }).passthrough(),
   league: z.object({
     id: z.number().int(),
     name: z.string().min(1).max(200),
     season: z.number().int(),
     round: z.string().nullable().optional()
-  }),
-  teams: z.object({ home: teamSchema, away: teamSchema }),
-  goals: z.object({ home: z.number().int().nullable(), away: z.number().int().nullable() })
-});
+  }).passthrough(),
+  teams: z.object({ home: teamSchema, away: teamSchema }).passthrough(),
+  goals: z.object({ home: z.number().int().nullable(), away: z.number().int().nullable() }).passthrough()
+}).passthrough();
 
 const eventSchema = z.object({
-  time: z.object({ elapsed: z.number().int().nonnegative(), extra: z.number().int().nullable().optional() }),
+  time: z.object({ elapsed: z.number().int().nonnegative(), extra: z.number().int().nullable().optional() }).passthrough(),
   team: teamSchema,
-  player: z.object({ name: z.string().nullable().optional() }).optional(),
-  assist: z.object({ name: z.string().nullable().optional() }).optional(),
+  player: z.object({ name: z.string().nullable().optional() }).nullable().optional(),
+  assist: z.object({ name: z.string().nullable().optional() }).nullable().optional(),
   type: z.string().min(1).max(100),
-  detail: z.string().min(1).max(200)
-});
+  detail: z.string().nullable().optional()
+}).passthrough();
 
 const statisticsSchema = z.object({
   team: teamSchema,
-  statistics: z.array(z.object({ type: z.string().min(1).max(100), value: z.unknown() })).max(100)
-});
+  statistics: z.array(z.object({ type: z.string().min(1).max(100), value: z.unknown() }).passthrough()).max(100)
+}).passthrough();
+
+const searchTeamSchema = z.object({
+  team: teamSchema
+}).passthrough();
 
 export type ApiFootballFixtureInput = z.infer<typeof fixtureSchema>;
 export type ApiFootballEventInput = z.infer<typeof eventSchema>;
@@ -57,18 +61,19 @@ async function waitForRateLimit(): Promise<void> {
 
 async function request<T>(path: string, schema: z.ZodType<T>): Promise<T> {
   if (!dataEnv.API_FOOTBALL_KEY) throw new Error("API_FOOTBALL_KEY is not configured");
-  // The free API-Football plan allows 10 requests/minute. All callers share this queue.
   await waitForRateLimit();
   const response = await fetch(`${dataEnv.API_FOOTBALL_BASE_URL.replace(/\/$/, "")}/${path}`, {
     signal: AbortSignal.timeout(30_000),
     headers: { accept: "application/json", "x-apisports-key": dataEnv.API_FOOTBALL_KEY }
   });
-  if (!response.ok) throw new Error(`API-Football request failed: HTTP ${response.status}`);
-  const payload = await response.json() as { response?: unknown; errors?: unknown };
-  if (payload.errors && Object.keys(payload.errors as object).length) {
+  const payload = await response.json().catch(() => undefined) as { response?: unknown; errors?: unknown } | undefined;
+  if (!response.ok) {
+    throw new Error(`API-Football request failed: HTTP ${response.status}${payload?.errors ? ` ${JSON.stringify(payload.errors).slice(0, 500)}` : ""}`);
+  }
+  if (payload?.errors && Object.keys(payload.errors as object).length) {
     throw new Error(`API-Football returned an error: ${JSON.stringify(payload.errors).slice(0, 500)}`);
   }
-  const parsed = schema.safeParse(payload.response);
+  const parsed = schema.safeParse(payload?.response);
   if (!parsed.success) throw new Error("API-Football returned an unexpected format");
   return parsed.data;
 }
@@ -79,6 +84,17 @@ export function fetchApiFootballFixtures(leagueId: number, season: number) {
 
 export function fetchApiFootballFixturesByDate(date: string) {
   return request(`fixtures?date=${encodeURIComponent(date)}`, z.array(fixtureSchema).max(5_000));
+}
+
+export function fetchApiFootballTeams(search: string) {
+  return request(`teams?search=${encodeURIComponent(search)}`, z.array(searchTeamSchema).max(20));
+}
+
+export function fetchApiFootballFixturesByTeam(teamId: number, from: string, to: string) {
+  return request(
+    `fixtures?team=${teamId}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    z.array(fixtureSchema).max(5_000)
+  );
 }
 
 export function fetchApiFootballEvents(fixtureId: number) {
