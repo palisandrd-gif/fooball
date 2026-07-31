@@ -33,7 +33,7 @@ No committed secrets or known production dependency vulnerabilities were found. 
 These are not release blockers for a small closed beta, but should be handled before wider paid use:
 
 1. **Prisma `db push` instead of versioned migrations (Medium).** The existing Railway database was created with `db push`. Move to baselined migrations before schema changes become frequent.
-2. **Long sync jobs run inside the bot process (Medium).** Move imports to a dedicated Railway cron/worker and use a queue before increasing traffic.
+2. **StatsBomb still runs manually (Low).** OpenFootball has a dedicated daily Railway cron command. Move the heavier StatsBomb import to its own weekly worker before increasing coverage.
 3. **No PostgreSQL integration test in CI (Medium).** Unit and compile checks exist, but rate-limit SQL and lock behavior should gain containerized integration tests.
 4. **In-memory Telegram conversation session (Low).** A restart can cancel a partially completed two-step interaction. Redis-backed sessions are appropriate when multiple bot replicas are introduced.
 5. **No payment verification (Expected MVP limitation).** Plans remain admin-assigned until a payment provider and webhook signature validation are implemented.
@@ -43,5 +43,5 @@ These are not release blockers for a small closed beta, but should be handled be
 - Keep exactly one long-polling bot replica until distributed Telegram update handling is designed.
 - Keep `BOT_TOKEN`, `DATABASE_URL`, `OPENAI_API_KEY` and admin IDs only in Railway variables.
 - Rotate the Telegram token immediately if it is ever pasted into chat, logs or source control.
-- Run OpenFootball sync daily and StatsBomb basic sync weekly from a separate scheduled worker.
+- Run OpenFootball daily through the dedicated Railway cron service and move StatsBomb basic sync to a separate weekly worker before beta traffic grows.
 - Enable Railway PostgreSQL backups before opening the beta to external users.

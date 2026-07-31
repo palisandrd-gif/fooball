@@ -1,4 +1,4 @@
 import pino from "pino";
-import { env } from "../config/env.js";
+import { dataEnv } from "../config/dataEnv.js";
 
-export const logger = pino({ level: env.LOG_LEVEL });
+export const logger = pino({ level: dataEnv.LOG_LEVEL });
