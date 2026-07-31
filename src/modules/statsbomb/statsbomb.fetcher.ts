@@ -1,4 +1,4 @@
-import { env } from "../../config/env.js";
+import { dataEnv } from "../../config/dataEnv.js";
 import { z } from "zod";
 import { fetchValidatedJson } from "../../utils/fetchJson.js";
 
@@ -45,7 +45,7 @@ const matchSchema: z.ZodType<StatsBombMatchInput> = z.object({
 });
 
 async function fetchJson<T>(path: string, schema: z.ZodType<T>): Promise<T> {
-  const url = `${env.STATSBOMB_BASE_URL.replace(/\/$/, "")}/${path}`;
+  const url = `${dataEnv.STATSBOMB_BASE_URL.replace(/\/$/, "")}/${path}`;
   return fetchValidatedJson(url, schema, { timeoutMs: 30_000 });
 }
 

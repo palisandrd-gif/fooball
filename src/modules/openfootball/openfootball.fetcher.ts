@@ -1,4 +1,4 @@
-import { env } from "../../config/env.js";
+import { dataEnv } from "../../config/dataEnv.js";
 import { z } from "zod";
 import { fetchValidatedJson } from "../../utils/fetchJson.js";
 
@@ -38,7 +38,7 @@ export async function fetchOpenFootballDataset(
   season: string,
   file: string
 ): Promise<OpenFootballDataset> {
-  const url = `${env.OPENFOOTBALL_BASE_URL.replace(/\/$/, "")}/${season}/${file}`;
+  const url = `${dataEnv.OPENFOOTBALL_BASE_URL.replace(/\/$/, "")}/${season}/${file}`;
   try {
     return await fetchValidatedJson(url, openFootballDatasetSchema, {
       timeoutMs: 20_000,

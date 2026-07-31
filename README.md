@@ -214,6 +214,18 @@ npm test
 
 Отчёт production-аудита и остаточные риски: [`docs/PRODUCTION_AUDIT.md`](docs/PRODUCTION_AUDIT.md).
 
+## Автоматическое обновление OpenFootball
+
+Для production рекомендуется отдельная Railway Cron-служба с командой:
+
+```bash
+npm run cron:openfootball
+```
+
+Расписание `15 3 * * *` запускает импорт каждый день в 03:15 UTC. Cron-службе нужны только `DATABASE_URL` и, при необходимости, `OPENFOOTBALL_BASE_URL`; Telegram- и OpenAI-секреты ей не передаются.
+
+Пошаговая настройка: [`docs/RAILWAY_CRON.md`](docs/RAILWAY_CRON.md).
+
 ## План реализации на 14 дней
 
 1. Каркас TypeScript, Telegraf, `/start`, главное меню.
