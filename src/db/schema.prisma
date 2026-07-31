@@ -99,8 +99,8 @@ model Team {
   name                 String
   normalizedName       String         @unique
   country              String?
-  apiFootballId        Int?           @unique
-  theSportsDbId        String?        @unique
+  apiFootballId        Int?
+  theSportsDbId        String?
   theSportsDbCheckedAt DateTime?
   badgeUrl             String?
   stadium              String?
@@ -114,6 +114,8 @@ model Team {
   favorites            FavoriteTeam[]
 
   @@index([name])
+  @@index([apiFootballId])
+  @@index([theSportsDbId])
 }
 
 model Match {
