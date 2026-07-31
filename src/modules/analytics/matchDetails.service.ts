@@ -30,6 +30,16 @@ function dayBounds(date: Date): { gte: Date; lt: Date } {
   return { gte, lt: new Date(gte.valueOf() + 86_400_000) };
 }
 
+function dateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function shiftUtcDate(date: Date, days: number): Date {
+  const shifted = new Date(date);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return shifted;
+}
+
 type MatchForDetails = {
   kickoffAt: Date;
   homeTeam: { name: string; apiFootballId: number | null };
@@ -40,12 +50,14 @@ type DetailedApiFixture = Prisma.ApiFootballFixtureGetPayload<{
   include: { statistics: true; events: true };
 }>;
 
-function apiFixtureScore(match: MatchForDetails, fixture: {
+type ApiFixtureCandidate = {
   homeTeamName: string;
   awayTeamName: string;
   homeTeamApiId: number;
   awayTeamApiId: number;
-}): number {
+};
+
+function apiFixtureScore(match: MatchForDetails, fixture: ApiFixtureCandidate): number {
   return externalMatchScore(
     match.homeTeam.name,
     match.awayTeam.name,
@@ -56,10 +68,15 @@ function apiFixtureScore(match: MatchForDetails, fixture: {
 }
 
 async function loadApiFixture(match: MatchForDetails): Promise<DetailedApiFixture | undefined> {
+  // Providers can store kickoff timestamps in different time zones. Search a
+  // three-day UTC window instead of requiring an exact calendar-day match.
+  const center = dayBounds(match.kickoffAt);
+  const gte = new Date(center.gte.valueOf() - 86_400_000);
+  const lt = new Date(center.lt.valueOf() + 86_400_000);
   const candidates = await prisma.apiFootballFixture.findMany({
-    where: { kickoffAt: dayBounds(match.kickoffAt) },
+    where: { kickoffAt: { gte, lt } },
     include: { statistics: true, events: { orderBy: [{ elapsed: "asc" }, { extra: "asc" }] } },
-    take: 30
+    take: 100
   });
   const selected = candidates
     .map((fixture) => ({ fixture, score: apiFixtureScore(match, fixture) }))
@@ -68,22 +85,30 @@ async function loadApiFixture(match: MatchForDetails): Promise<DetailedApiFixtur
 }
 
 async function fetchAndCacheApiFixture(match: MatchForDetails): Promise<DetailedApiFixture | undefined> {
-  const date = match.kickoffAt.toISOString().slice(0, 10);
-  const inputs = await fetchApiFootballFixturesByDate(date);
-  const selected = inputs
-    .map((input) => ({
-      input,
-      score: externalMatchScore(
-        match.homeTeam.name,
-        match.awayTeam.name,
-        input.teams.home.name,
-        input.teams.away.name
-      )
-    }))
-    .sort((a, b) => b.score - a.score)[0];
-  if (!selected || !isLikelySameMatch(selected.score)) return undefined;
-  await upsertApiFootballFixture(selected.input);
-  return loadApiFixture(match);
+  // API-Football may return the fixture on an adjacent calendar date because
+  // its response timestamp uses a league/provider timezone. Try -1/0/+1 day.
+  const dates = [-1, 0, 1].map((offset) => dateString(shiftUtcDate(match.kickoffAt, offset)));
+  const inputs = [];
+  for (const date of dates) {
+    const fixtures = await fetchApiFootballFixturesByDate(date);
+    inputs.push(...fixtures);
+    const selected = fixtures
+      .map((input) => ({
+        input,
+        score: externalMatchScore(
+          match.homeTeam.name,
+          match.awayTeam.name,
+          input.teams.home.name,
+          input.teams.away.name
+        )
+      }))
+      .sort((a, b) => b.score - a.score)[0];
+    if (selected && isLikelySameMatch(selected.score)) {
+      await upsertApiFootballFixture(selected.input);
+      return loadApiFixture(match);
+    }
+  }
+  return undefined;
 }
 
 async function apiFootballDetails(match: MatchForDetails): Promise<string | undefined> {
@@ -135,10 +160,11 @@ async function statsBombDetails(match: {
   homeTeam: { name: string };
   awayTeam: { name: string };
 }): Promise<string | undefined> {
+  const center = dayBounds(match.kickoffAt);
   const candidates = await prisma.statsBombMatch.findMany({
-    where: { matchDate: dayBounds(match.kickoffAt) },
+    where: { matchDate: { gte: new Date(center.gte.valueOf() - 86_400_000), lt: new Date(center.lt.valueOf() + 86_400_000) } },
     include: { events: true, lineup: true },
-    take: 30
+    take: 100
   });
   const selected = candidates
     .map((item) => ({
