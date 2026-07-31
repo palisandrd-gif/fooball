@@ -1,4 +1,5 @@
-import { PlanType } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import { PlanType, Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma.js";
 import { env } from "../../config/env.js";
 import { startOfUtcDay } from "../../utils/date.js";
@@ -26,21 +27,19 @@ export const limitsService = {
     const day = startOfUtcDay();
     const limit = planLimit[plan];
 
-    return prisma.$transaction(async (tx) => {
-      const usage = await tx.dailyUsage.upsert({
-        where: { userId_day: { userId, day } },
-        create: { userId, day, count: 0 },
-        update: {}
-      });
+    // One INSERT ... ON CONFLICT statement makes the limit strict even when a user
+    // sends several requests at the same time from different bot instances.
+    const rows = await prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+      INSERT INTO "DailyUsage" ("id", "userId", "day", "count", "createdAt", "updatedAt")
+      VALUES (${randomUUID()}, ${userId}, ${day}, 1, NOW(), NOW())
+      ON CONFLICT ("userId", "day") DO UPDATE
+      SET "count" = "DailyUsage"."count" + 1, "updatedAt" = NOW()
+      WHERE "DailyUsage"."count" < ${limit}
+      RETURNING "count"
+    `);
 
-      if (usage.count >= limit) throw new LimitExceededError(limit);
-
-      const updated = await tx.dailyUsage.update({
-        where: { id: usage.id },
-        data: { count: { increment: 1 } }
-      });
-      return { plan, used: updated.count, limit };
-    });
+    if (!rows[0]) throw new LimitExceededError(limit);
+    return { plan, used: rows[0].count, limit };
   },
 
   async status(userId: string) {

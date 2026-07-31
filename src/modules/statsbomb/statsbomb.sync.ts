@@ -1,5 +1,6 @@
 import { DataSource, SyncStatus } from "@prisma/client";
 import { prisma } from "../../db/prisma.js";
+import { syncLockService } from "../admin/syncLock.service.js";
 import {
   fetchStatsBombCompetitions,
   fetchStatsBombMatches
@@ -12,13 +13,16 @@ function optionalDate(value?: string): Date | undefined {
 }
 
 export async function syncStatsBombBasic(): Promise<{ competitions: number; matches: number }> {
-  const log = await prisma.dataSyncLog.create({
-    data: { source: DataSource.STATSBOMB, status: SyncStatus.RUNNING }
-  });
+  const lock = await syncLockService.acquire(DataSource.STATSBOMB);
+  let logId: string | undefined;
   let competitionCount = 0;
   let matchCount = 0;
 
   try {
+    const log = await prisma.dataSyncLog.create({
+      data: { source: DataSource.STATSBOMB, status: SyncStatus.RUNNING }
+    });
+    logId = log.id;
     const competitions = await fetchStatsBombCompetitions();
     for (const input of competitions) {
       const competition = await prisma.statsBombCompetition.upsert({
@@ -72,7 +76,7 @@ export async function syncStatsBombBasic(): Promise<{ competitions: number; matc
     }
 
     await prisma.dataSyncLog.update({
-      where: { id: log.id },
+      where: { id: logId },
       data: {
         status: SyncStatus.SUCCESS,
         completedAt: new Date(),
@@ -82,15 +86,19 @@ export async function syncStatsBombBasic(): Promise<{ competitions: number; matc
     });
     return { competitions: competitionCount, matches: matchCount };
   } catch (error) {
-    await prisma.dataSyncLog.update({
-      where: { id: log.id },
-      data: {
-        status: SyncStatus.FAILED,
-        completedAt: new Date(),
-        records: matchCount,
-        message: (error as Error).message
-      }
-    });
+    if (logId) {
+      await prisma.dataSyncLog.update({
+        where: { id: logId },
+        data: {
+          status: SyncStatus.FAILED,
+          completedAt: new Date(),
+          records: matchCount,
+          message: (error as Error).message.slice(0, 5000)
+        }
+      });
+    }
     throw error;
+  } finally {
+    await syncLockService.release(lock);
   }
 }

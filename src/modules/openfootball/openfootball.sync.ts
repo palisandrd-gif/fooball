@@ -1,5 +1,6 @@
 import { DataSource, SyncStatus } from "@prisma/client";
 import { prisma } from "../../db/prisma.js";
+import { syncLockService } from "../admin/syncLock.service.js";
 import { logger } from "../../utils/logger.js";
 import { fetchOpenFootballDataset } from "./openfootball.fetcher.js";
 import { parseOpenFootballDataset } from "./openfootball.parser.js";
@@ -15,13 +16,16 @@ export const SUPPORTED_LEAGUES = [
 export const SUPPORTED_SEASONS = ["2023-24", "2024-25", "2025-26"] as const;
 
 export async function syncOpenFootball(): Promise<{ records: number; warnings: string[] }> {
-  const log = await prisma.dataSyncLog.create({
-    data: { source: DataSource.OPENFOOTBALL, status: SyncStatus.RUNNING }
-  });
+  const lock = await syncLockService.acquire(DataSource.OPENFOOTBALL);
+  let logId: string | undefined;
   let records = 0;
   const warnings: string[] = [];
 
   try {
+    const log = await prisma.dataSyncLog.create({
+      data: { source: DataSource.OPENFOOTBALL, status: SyncStatus.RUNNING }
+    });
+    logId = log.id;
     for (const leagueConfig of SUPPORTED_LEAGUES) {
       const league = await prisma.league.upsert({
         where: { code: leagueConfig.code },
@@ -118,7 +122,7 @@ export async function syncOpenFootball(): Promise<{ records: number; warnings: s
     }
 
     await prisma.dataSyncLog.update({
-      where: { id: log.id },
+      where: { id: logId },
       data: {
         status: SyncStatus.SUCCESS,
         completedAt: new Date(),
@@ -128,15 +132,19 @@ export async function syncOpenFootball(): Promise<{ records: number; warnings: s
     });
     return { records, warnings };
   } catch (error) {
-    await prisma.dataSyncLog.update({
-      where: { id: log.id },
-      data: {
-        status: SyncStatus.FAILED,
-        completedAt: new Date(),
-        records,
-        message: (error as Error).message
-      }
-    });
+    if (logId) {
+      await prisma.dataSyncLog.update({
+        where: { id: logId },
+        data: {
+          status: SyncStatus.FAILED,
+          completedAt: new Date(),
+          records,
+          message: (error as Error).message.slice(0, 5000)
+        }
+      });
+    }
     throw error;
+  } finally {
+    await syncLockService.release(lock);
   }
 }

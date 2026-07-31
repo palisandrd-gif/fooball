@@ -2,7 +2,7 @@ import { prisma } from "../../db/prisma.js";
 
 export const matchSummaryService = {
   findTeamCandidates(query: string) {
-    const terms = query.trim().split(/\s+/).filter(Boolean).slice(0, 3);
+    const terms = query.trim().slice(0, 80).split(/\s+/).filter(Boolean).slice(0, 3);
     return prisma.team.findMany({
       where: {
         OR: terms.flatMap((term) => [

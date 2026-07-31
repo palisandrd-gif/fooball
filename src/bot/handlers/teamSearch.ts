@@ -2,7 +2,7 @@ import { Markup } from "telegraf";
 import { prisma } from "../../db/prisma.js";
 import { matchSummaryService } from "../../modules/analytics/matchSummary.service.js";
 import { similarityScore } from "../../utils/normalizeTeamName.js";
-import { consumeRequest, currentUser } from "../helpers.js";
+import { consumeRequest, requireProAccess } from "../helpers.js";
 import { formatMatches } from "../formatters.js";
 import { BotContext } from "../types.js";
 
@@ -70,7 +70,11 @@ export async function showTeam(ctx: BotContext, teamId: string) {
 }
 
 export async function addFavorite(ctx: BotContext, teamId: string) {
-  const user = await currentUser(ctx);
+  const user = await requireProAccess(ctx);
+  if (!user) {
+    await ctx.answerCbQuery("Нужен тариф Pro");
+    return;
+  }
   await prisma.favoriteTeam.upsert({
     where: { userId_teamId: { userId: user.id, teamId } },
     create: { userId: user.id, teamId },

@@ -195,6 +195,13 @@ model DataSyncLog {
   message     String?
 }
 
+model DataSyncLock {
+  source      DataSource @id
+  ownerId     String
+  lockedUntil DateTime
+  updatedAt   DateTime   @updatedAt
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String?

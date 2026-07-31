@@ -210,6 +210,10 @@ npm run build
 npm test
 ```
 
+Для pull request и `main` те же проверки автоматически запускаются через GitHub Actions. Railway использует настройки из `railway.json`, поэтому команды сборки, обновления схемы и запуска хранятся вместе с кодом.
+
+Отчёт production-аудита и остаточные риски: [`docs/PRODUCTION_AUDIT.md`](docs/PRODUCTION_AUDIT.md).
+
 ## План реализации на 14 дней
 
 1. Каркас TypeScript, Telegraf, `/start`, главное меню.
