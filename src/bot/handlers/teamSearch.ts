@@ -69,7 +69,7 @@ export async function showTeam(ctx: BotContext, teamId: string) {
 
   const buttons = [[Markup.button.callback("⭐ Добавить в избранное", `fav:add:${team.id}`)]];
   if (recent[0]) {
-    buttons.push([Markup.button.callback("📊 Подробности матча", `details:${recent[0].id}`)]);
+    buttons.push([Markup.button.callback("📊 Статистика матча", `details:${recent[0].id}`)]);
     buttons.push([Markup.button.callback("🧠 Объяснить последний матч", `explain:${recent[0].id}`)]);
   }
   if (team.badgeUrl) {
