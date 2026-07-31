@@ -2,11 +2,26 @@ import "dotenv/config";
 import { z } from "zod";
 
 const envSchema = z.object({
-  BOT_TOKEN: z.string().min(1),
-  DATABASE_URL: z.string().min(1),
+  BOT_TOKEN: z
+    .string()
+    .min(20)
+    .refine((value) => /^\d+:[A-Za-z0-9_-]+$/.test(value), "BOT_TOKEN has an invalid format"),
+  DATABASE_URL: z
+    .string()
+    .min(1)
+    .refine(
+      (value) => value.startsWith("postgresql://") || value.startsWith("postgres://"),
+      "DATABASE_URL must be a PostgreSQL connection string"
+    ),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4.1-mini"),
-  ADMIN_TELEGRAM_IDS: z.string().default(""),
+  ADMIN_TELEGRAM_IDS: z
+    .string()
+    .min(1, "At least one admin Telegram ID is required")
+    .refine(
+      (value) => value.split(",").every((id) => /^\d+$/.test(id.trim())),
+      "ADMIN_TELEGRAM_IDS must contain comma-separated numeric IDs"
+    ),
   OPENFOOTBALL_BASE_URL: z
     .string()
     .url()

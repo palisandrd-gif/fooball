@@ -1,4 +1,6 @@
 import { env } from "../../config/env.js";
+import { z } from "zod";
+import { fetchValidatedJson } from "../../utils/fetchJson.js";
 
 export interface StatsBombCompetitionInput {
   competition_id: number;
@@ -21,17 +23,39 @@ export interface StatsBombMatchInput {
   stadium?: { name?: string };
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
+const competitionSchema: z.ZodType<StatsBombCompetitionInput> = z.object({
+  competition_id: z.number().int(),
+  season_id: z.number().int(),
+  country_name: z.string().max(200).optional(),
+  competition_name: z.string().min(1).max(200),
+  season_name: z.string().min(1).max(100),
+  match_available: z.string().optional()
+});
+
+const matchSchema: z.ZodType<StatsBombMatchInput> = z.object({
+  match_id: z.number().int(),
+  match_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  kick_off: z.string().optional(),
+  home_team: z.object({ home_team_name: z.string().min(1).max(200) }),
+  away_team: z.object({ away_team_name: z.string().min(1).max(200) }),
+  home_score: z.number().int().nonnegative().optional(),
+  away_score: z.number().int().nonnegative().optional(),
+  match_week: z.number().int().nonnegative().optional(),
+  stadium: z.object({ name: z.string().max(200).optional() }).optional()
+});
+
+async function fetchJson<T>(path: string, schema: z.ZodType<T>): Promise<T> {
   const url = `${env.STATSBOMB_BASE_URL.replace(/\/$/, "")}/${path}`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error(`StatsBomb request failed: ${response.status} ${path}`);
-  return (await response.json()) as T;
+  return fetchValidatedJson(url, schema, { timeoutMs: 30_000 });
 }
 
 export function fetchStatsBombCompetitions() {
-  return fetchJson<StatsBombCompetitionInput[]>("competitions.json");
+  return fetchJson("competitions.json", z.array(competitionSchema).max(1_000));
 }
 
 export function fetchStatsBombMatches(competitionId: number, seasonId: number) {
-  return fetchJson<StatsBombMatchInput[]>(`matches/${competitionId}/${seasonId}.json`);
+  return fetchJson(
+    `matches/${competitionId}/${seasonId}.json`,
+    z.array(matchSchema).max(10_000)
+  );
 }

@@ -1,6 +1,7 @@
 import { PlanType } from "@prisma/client";
 import { adminTelegramIds } from "../../config/env.js";
 import { adminService } from "../../modules/admin/admin.service.js";
+import { SyncAlreadyRunningError } from "../../modules/admin/syncLock.service.js";
 import { subscriptionService } from "../../modules/subscriptions/subscription.service.js";
 import { syncOpenFootball } from "../../modules/openfootball/openfootball.sync.js";
 import { syncStatsBombBasic } from "../../modules/statsbomb/statsbomb.sync.js";
@@ -54,7 +55,11 @@ export async function syncOpenFootballCommand(ctx: BotContext) {
     await ctx.reply(
       `Обновление завершено. Обработано матчей: ${result.records}. Пропущено наборов: ${result.warnings.length}.`
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof SyncAlreadyRunningError) {
+      await ctx.reply("Обновление OpenFootball уже выполняется.");
+      return;
+    }
     await ctx.reply("Не удалось обновить данные. Подробности записаны в журнал синхронизации.");
   }
 }
@@ -67,7 +72,11 @@ export async function syncStatsBombCommand(ctx: BotContext) {
     await ctx.reply(
       `StatsBomb обновлён. Турниров: ${result.competitions}, матчей: ${result.matches}.`
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof SyncAlreadyRunningError) {
+      await ctx.reply("Обновление StatsBomb уже выполняется.");
+      return;
+    }
     await ctx.reply("Не удалось обновить StatsBomb. Попробуйте позже.");
   }
 }

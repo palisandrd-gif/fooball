@@ -31,6 +31,15 @@ export async function consumeRequest(ctx: BotContext, proOnly = false) {
   }
 }
 
+export async function requireProAccess(ctx: BotContext) {
+  const user = await currentUser(ctx);
+  if (!user.subscription || user.subscription.plan === "FREE") {
+    await ctx.reply("Эта функция доступна на тарифе Pro. Откройте раздел «💳 Подписка».");
+    return null;
+  }
+  return user;
+}
+
 export function isAdmin(ctx: BotContext, adminIds: Set<string>): boolean {
   return Boolean(ctx.from && adminIds.has(String(ctx.from.id)));
 }

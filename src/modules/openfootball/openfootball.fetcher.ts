@@ -1,4 +1,6 @@
 import { env } from "../../config/env.js";
+import { z } from "zod";
+import { fetchValidatedJson } from "../../utils/fetchJson.js";
 
 export interface OpenFootballMatch {
   round?: string;
@@ -17,15 +19,32 @@ export interface OpenFootballDataset {
   matches: OpenFootballMatch[];
 }
 
+const scorePair = z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()]);
+const openFootballDatasetSchema: z.ZodType<OpenFootballDataset> = z.object({
+  name: z.string().min(1).max(200),
+  matches: z.array(
+    z.object({
+      round: z.string().max(100).optional(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      team1: z.string().min(1).max(200),
+      team2: z.string().min(1).max(200),
+      score: z.object({ ft: scorePair.optional(), ht: scorePair.optional() }).optional()
+    })
+  ).max(2_000)
+});
+
 export async function fetchOpenFootballDataset(
   season: string,
   file: string
 ): Promise<OpenFootballDataset> {
   const url = `${env.OPENFOOTBALL_BASE_URL.replace(/\/$/, "")}/${season}/${file}`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-  if (response.status === 404) {
-    throw new Error(`Dataset not available: ${season}/${file}`);
+  try {
+    return await fetchValidatedJson(url, openFootballDatasetSchema, {
+      timeoutMs: 20_000,
+      maxBytes: 10 * 1024 * 1024
+    });
+  } catch (error) {
+    throw new Error(`OpenFootball ${season}/${file}: ${(error as Error).message}`);
   }
-  if (!response.ok) throw new Error(`OpenFootball request failed: ${response.status}`);
-  return (await response.json()) as OpenFootballDataset;
 }
