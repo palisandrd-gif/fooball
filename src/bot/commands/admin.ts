@@ -4,7 +4,9 @@ import { adminService } from "../../modules/admin/admin.service.js";
 import { SyncAlreadyRunningError } from "../../modules/admin/syncLock.service.js";
 import { subscriptionService } from "../../modules/subscriptions/subscription.service.js";
 import { syncOpenFootball } from "../../modules/openfootball/openfootball.sync.js";
-import { syncStatsBombBasic } from "../../modules/statsbomb/statsbomb.sync.js";
+import { syncStatsBombBasic, syncStatsBombDetails } from "../../modules/statsbomb/statsbomb.sync.js";
+import { syncApiFootball } from "../../modules/apiFootball/apiFootball.sync.js";
+import { syncTheSportsDb } from "../../modules/theSportsDb/theSportsDb.sync.js";
 import { formatMatchDate } from "../../utils/date.js";
 import { currentUser, isAdmin } from "../helpers.js";
 import { BotContext } from "../types.js";
@@ -78,5 +80,59 @@ export async function syncStatsBombCommand(ctx: BotContext) {
       return;
     }
     await ctx.reply("Не удалось обновить StatsBomb. Попробуйте позже.");
+  }
+}
+
+export async function syncStatsBombDetailsCommand(ctx: BotContext) {
+  if (!(await requireAdmin(ctx))) return;
+  const text = ctx.message && "text" in ctx.message ? ctx.message.text : "";
+  const rawMatchId = text.trim().split(/\s+/)[1];
+  const matchId = rawMatchId ? Number(rawMatchId) : undefined;
+  if (rawMatchId && !Number.isInteger(matchId)) {
+    await ctx.reply("Использование: /sync_statsbomb_details [match_id]");
+    return;
+  }
+  await ctx.reply("Загрузка событий и составов StatsBomb запущена.");
+  try {
+    const result = await syncStatsBombDetails(matchId);
+    await ctx.reply(
+      `Расширенные данные StatsBomb обновлены. Матчей: ${result.matches}, событий: ${result.events}, игроков: ${result.players}.`
+    );
+  } catch (error) {
+    if (error instanceof SyncAlreadyRunningError) {
+      await ctx.reply("Обновление StatsBomb уже выполняется.");
+      return;
+    }
+    await ctx.reply("Не удалось загрузить расширенные данные StatsBomb.");
+  }
+}
+
+export async function syncApiFootballCommand(ctx: BotContext) {
+  if (!(await requireAdmin(ctx))) return;
+  await ctx.reply("Обновление актуальных матчей и статистики запущено.");
+  try {
+    const result = await syncApiFootball();
+    await ctx.reply(`API-Football обновлён. Матчей: ${result.fixtures}, с подробной статистикой: ${result.detailed}.`);
+  } catch (error) {
+    if (error instanceof SyncAlreadyRunningError) {
+      await ctx.reply("Обновление API-Football уже выполняется.");
+      return;
+    }
+    await ctx.reply("Не удалось обновить API-Football. Проверьте API_FOOTBALL_KEY и журнал синхронизации.");
+  }
+}
+
+export async function syncTheSportsDbCommand(ctx: BotContext) {
+  if (!(await requireAdmin(ctx))) return;
+  await ctx.reply("Обновление карточек команд запущено.");
+  try {
+    const result = await syncTheSportsDb();
+    await ctx.reply(`Карточки команд обновлены: ${result.enriched}. Не найдено: ${result.notFound}.`);
+  } catch (error) {
+    if (error instanceof SyncAlreadyRunningError) {
+      await ctx.reply("Обновление TheSportsDB уже выполняется.");
+      return;
+    }
+    await ctx.reply("Не удалось обновить карточки. Проверьте THESPORTSDB_API_KEY.");
   }
 }

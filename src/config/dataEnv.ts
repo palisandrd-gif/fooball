@@ -17,6 +17,15 @@ const dataEnvSchema = z.object({
     .string()
     .url()
     .default("https://raw.githubusercontent.com/statsbomb/open-data/master/data"),
+  STATSBOMB_DETAIL_MATCH_LIMIT: z.coerce.number().int().min(1).max(100).default(10),
+  API_FOOTBALL_KEY: z.string().min(1).optional(),
+  API_FOOTBALL_BASE_URL: z.string().url().default("https://v3.football.api-sports.io"),
+  API_FOOTBALL_LEAGUE_IDS: z.string().default("39,78,140,135,61"),
+  API_FOOTBALL_SEASONS: z.string().default("2025,2026"),
+  API_FOOTBALL_DETAIL_LIMIT: z.coerce.number().int().min(0).max(40).default(15),
+  THESPORTSDB_API_KEY: z.string().min(1).optional(),
+  THESPORTSDB_BASE_URL: z.string().url().default("https://www.thesportsdb.com/api/v1/json"),
+  THESPORTSDB_SYNC_LIMIT: z.coerce.number().int().min(1).max(100).default(20),
   LOG_LEVEL: z.string().default("info")
 });
 

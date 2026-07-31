@@ -19,7 +19,10 @@
     "prisma:deploy": "prisma migrate deploy --schema src/db/schema.prisma",
     "sync:openfootball": "tsx src/scripts/sync-openfootball.ts",
     "cron:openfootball": "node dist/scripts/sync-openfootball.js",
-    "sync:statsbomb": "tsx src/scripts/sync-statsbomb.ts"
+    "sync:statsbomb": "tsx src/scripts/sync-statsbomb.ts",
+    "sync:statsbomb-details": "tsx src/scripts/sync-statsbomb-details.ts",
+    "sync:api-football": "tsx src/scripts/sync-api-football.ts",
+    "sync:thesportsdb": "tsx src/scripts/sync-thesportsdb.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.12.0",

@@ -55,6 +55,9 @@ export async function showTeam(ctx: BotContext, teamId: string) {
 
   const text = [
     `⚽ ${team.name}`,
+    team.country ? `Страна: ${team.country}` : undefined,
+    team.stadium ? `Стадион: ${team.stadium}` : undefined,
+    team.websiteUrl ? `Сайт: ${team.websiteUrl}` : undefined,
     `Доступные сезоны: ${seasons.join(", ") || "нет данных"}`,
     "",
     "Последние матчи:",
@@ -62,11 +65,27 @@ export async function showTeam(ctx: BotContext, teamId: string) {
     "",
     "Ближайшие матчи:",
     upcoming.length ? formatMatches(upcoming) : "Нет ближайших матчей."
-  ].join("\n");
+  ].filter((line) => line !== undefined).join("\n");
 
   const buttons = [[Markup.button.callback("⭐ Добавить в избранное", `fav:add:${team.id}`)]];
-  if (recent[0]) buttons.push([Markup.button.callback("🧠 Объяснить последний матч", `explain:${recent[0].id}`)]);
-  await ctx.reply(text.slice(0, 3900), Markup.inlineKeyboard(buttons));
+  if (recent[0]) {
+    buttons.push([Markup.button.callback("📊 Подробности матча", `details:${recent[0].id}`)]);
+    buttons.push([Markup.button.callback("🧠 Объяснить последний матч", `explain:${recent[0].id}`)]);
+  }
+  if (team.badgeUrl) {
+    try {
+      await ctx.replyWithPhoto(team.badgeUrl, {
+        caption: text.slice(0, 1000),
+        ...Markup.inlineKeyboard(buttons)
+      });
+      return;
+    } catch {
+      // A remote badge can disappear; the team card must still remain usable.
+    }
+    await ctx.reply(text.slice(0, 3900), Markup.inlineKeyboard(buttons));
+  } else {
+    await ctx.reply(text.slice(0, 3900), Markup.inlineKeyboard(buttons));
+  }
 }
 
 export async function addFavorite(ctx: BotContext, teamId: string) {
