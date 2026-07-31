@@ -1,18 +1,23 @@
 import { prisma } from "../../db/prisma.js";
+import { teamSearchScore } from "../../utils/teamAliases.js";
 
 export const matchSummaryService = {
-  findTeamCandidates(query: string) {
-    const terms = query.trim().slice(0, 80).split(/\s+/).filter(Boolean).slice(0, 3);
-    return prisma.team.findMany({
-      where: {
-        OR: terms.flatMap((term) => [
-          { name: { contains: term, mode: "insensitive" as const } },
-          { normalizedName: { contains: term.toLowerCase() } }
-        ])
-      },
-      take: 8,
+  async findTeamCandidates(query: string) {
+    const safeQuery = query.trim().slice(0, 80);
+    if (!safeQuery) return [];
+
+    // The MVP has only a few hundred teams. Ranking the bounded list in memory
+    // enables Cyrillic transliteration, aliases and fuzzy matching without a DB extension.
+    const teams = await prisma.team.findMany({
+      take: 500,
       orderBy: { name: "asc" }
     });
+    return teams
+      .map((team) => ({ team, score: teamSearchScore(safeQuery, team.name) }))
+      .filter(({ score }) => score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 8)
+      .map(({ team }) => team);
   },
 
   recentForTeam(teamId: string, take = 5) {

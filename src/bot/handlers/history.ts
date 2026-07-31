@@ -1,19 +1,19 @@
 import { Markup } from "telegraf";
 import { headToHeadService } from "../../modules/analytics/headToHead.service.js";
 import { matchSummaryService } from "../../modules/analytics/matchSummary.service.js";
-import { similarityScore } from "../../utils/normalizeTeamName.js";
+import { teamSearchScore } from "../../utils/teamAliases.js";
 import { consumeRequest } from "../helpers.js";
 import { formatMatches } from "../formatters.js";
 import { BotContext } from "../types.js";
 
 export async function beginHistory(ctx: BotContext) {
   ctx.session = { action: "history_team_one" };
-  await ctx.reply("Введите название первой команды:");
+  await ctx.reply("Введите название первой команды — можно на русском или английском:");
 }
 
 async function candidateButtons(query: string, prefix: string) {
   const teams = (await matchSummaryService.findTeamCandidates(query))
-    .map((team) => ({ ...team, score: similarityScore(query, team.name) }))
+    .map((team) => ({ ...team, score: teamSearchScore(query, team.name) }))
     .filter((team) => team.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
@@ -32,7 +32,9 @@ export async function handleHistoryText(ctx: BotContext, query: string) {
 
 export async function selectFirstHistoryTeam(ctx: BotContext, teamId: string, teamName: string) {
   ctx.session = { action: "history_team_two", firstTeamId: teamId, firstTeamName: teamName };
-  await ctx.reply(`Первая команда: ${teamName}\nВведите название второй команды:`);
+  await ctx.reply(
+    `Первая команда: ${teamName}\nВведите название второй команды — можно на русском или английском:`
+  );
 }
 
 export async function selectSecondHistoryTeam(
