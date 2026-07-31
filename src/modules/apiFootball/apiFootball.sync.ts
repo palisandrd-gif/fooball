@@ -85,53 +85,70 @@ export async function hydrateApiFootballFixture(
   fixtureDbId: string,
   fixtureId: number
 ): Promise<void> {
-  const [events, stats] = await Promise.all([
-    fetchApiFootballEvents(fixtureId),
-    fetchApiFootballStatistics(fixtureId)
-  ]);
-  await prisma.$transaction(async (tx) => {
-    await tx.apiFootballEvent.deleteMany({ where: { fixtureDbId } });
-    if (events.length) {
-      await tx.apiFootballEvent.createMany({
-        data: events.map((event) => ({
-          fixtureDbId,
-          elapsed: event.time.elapsed,
-          extra: event.time.extra,
-          teamApiId: event.team.id,
-          teamName: event.team.name,
-          playerName: event.player?.name,
-          assistName: event.assist?.name,
-          type: event.type,
-          detail: event.detail
-        }))
-      });
-    }
-    for (const team of stats) {
-      for (const stat of team.statistics) {
-        await tx.apiFootballStatistic.upsert({
-          where: {
-            fixtureDbId_teamApiId_type: {
-              fixtureDbId,
-              teamApiId: team.team.id,
-              type: stat.type
-            }
-          },
-          create: {
+  let eventsSaved = false;
+  let statisticsSaved = false;
+
+  try {
+    const events = await fetchApiFootballEvents(fixtureId);
+    await prisma.$transaction(async (tx) => {
+      await tx.apiFootballEvent.deleteMany({ where: { fixtureDbId } });
+      if (events.length) {
+        await tx.apiFootballEvent.createMany({
+          data: events.map((event) => ({
             fixtureDbId,
-            teamApiId: team.team.id,
-            teamName: team.team.name,
-            type: stat.type,
-            value: statisticValue(stat.value)
-          },
-          update: { value: statisticValue(stat.value), teamName: team.team.name }
+            elapsed: event.time.elapsed,
+            extra: event.time.extra,
+            teamApiId: event.team.id,
+            teamName: event.team.name,
+            playerName: event.player?.name,
+            assistName: event.assist?.name,
+            type: event.type,
+            detail: event.detail ?? ""
+          }))
         });
       }
-    }
-    await tx.apiFootballFixture.update({
+    });
+    eventsSaved = true;
+  } catch {
+    // Keep fixture data usable even if the events endpoint is unavailable.
+  }
+
+  try {
+    const stats = await fetchApiFootballStatistics(fixtureId);
+    await prisma.$transaction(async (tx) => {
+      for (const team of stats) {
+        for (const stat of team.statistics) {
+          await tx.apiFootballStatistic.upsert({
+            where: {
+              fixtureDbId_teamApiId_type: {
+                fixtureDbId,
+                teamApiId: team.team.id,
+                type: stat.type
+              }
+            },
+            create: {
+              fixtureDbId,
+              teamApiId: team.team.id,
+              teamName: team.team.name,
+              type: stat.type,
+              value: statisticValue(stat.value)
+            },
+            update: { value: statisticValue(stat.value), teamName: team.team.name }
+          });
+        }
+      }
+    });
+    statisticsSaved = true;
+  } catch {
+    // Some fixtures do not expose statistics; events/basic fixture data remain available.
+  }
+
+  if (eventsSaved || statisticsSaved) {
+    await prisma.apiFootballFixture.update({
       where: { id: fixtureDbId },
       data: { detailsFetchedAt: new Date() }
     });
-  });
+  }
 }
 
 export async function syncApiFootball(): Promise<{ fixtures: number; detailed: number }> {
