@@ -1,20 +1,20 @@
 import { Markup } from "telegraf";
 import { prisma } from "../../db/prisma.js";
 import { matchSummaryService } from "../../modules/analytics/matchSummary.service.js";
-import { similarityScore } from "../../utils/normalizeTeamName.js";
+import { teamSearchScore } from "../../utils/teamAliases.js";
 import { consumeRequest, requireProAccess } from "../helpers.js";
 import { formatMatches } from "../formatters.js";
 import { BotContext } from "../types.js";
 
 export async function beginTeamSearch(ctx: BotContext) {
   ctx.session = { action: "team_search" };
-  await ctx.reply("Введите название команды:");
+  await ctx.reply("Введите название команды — можно на русском или английском:");
 }
 
 export async function handleTeamSearchText(ctx: BotContext, query: string) {
   if (!(await consumeRequest(ctx))) return;
   const teams = (await matchSummaryService.findTeamCandidates(query))
-    .map((team) => ({ ...team, score: similarityScore(query, team.name) }))
+    .map((team) => ({ ...team, score: teamSearchScore(query, team.name) }))
     .filter((team) => team.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
