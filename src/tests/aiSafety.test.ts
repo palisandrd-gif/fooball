@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { fallbackExplanation, hasUnsupportedClaims } from "../modules/ai/aiSafety.js";
+import {
+  fallbackExplanation,
+  hasUnsupportedClaims,
+  withDetailsNotice
+} from "../modules/ai/aiSafety.js";
 
 const match = {
   homeTeam: "Arsenal",
@@ -25,5 +29,11 @@ describe("AI explanation safety", () => {
     "Arsenal контролировал центр поля"
   ])("rejects unsupported model claim: %s", (output) => {
     expect(hasUnsupportedClaims(output)).toBe(true);
+  });
+
+  it("replaces the missing-data warning when verified details are appended", () => {
+    const output = withDetailsNotice(fallbackExplanation(match), true);
+    expect(output).toContain("Подтверждённая расширенная статистика приведена ниже");
+    expect(output).not.toContain("Без событийных данных");
   });
 });

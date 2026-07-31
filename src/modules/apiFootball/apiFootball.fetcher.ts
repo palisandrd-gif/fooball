@@ -39,8 +39,26 @@ export type ApiFootballFixtureInput = z.infer<typeof fixtureSchema>;
 export type ApiFootballEventInput = z.infer<typeof eventSchema>;
 export type ApiFootballStatisticsInput = z.infer<typeof statisticsSchema>;
 
+let requestQueue: Promise<void> = Promise.resolve();
+let lastRequestStartedAt = 0;
+
+async function waitForRateLimit(): Promise<void> {
+  const slot = requestQueue.then(async () => {
+    const waitMs = Math.max(
+      0,
+      dataEnv.API_FOOTBALL_MIN_INTERVAL_MS - (Date.now() - lastRequestStartedAt)
+    );
+    if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    lastRequestStartedAt = Date.now();
+  });
+  requestQueue = slot.catch(() => undefined);
+  await slot;
+}
+
 async function request<T>(path: string, schema: z.ZodType<T>): Promise<T> {
   if (!dataEnv.API_FOOTBALL_KEY) throw new Error("API_FOOTBALL_KEY is not configured");
+  // The free API-Football plan allows 10 requests/minute. All callers share this queue.
+  await waitForRateLimit();
   const response = await fetch(`${dataEnv.API_FOOTBALL_BASE_URL.replace(/\/$/, "")}/${path}`, {
     signal: AbortSignal.timeout(30_000),
     headers: { accept: "application/json", "x-apisports-key": dataEnv.API_FOOTBALL_KEY }
@@ -57,6 +75,10 @@ async function request<T>(path: string, schema: z.ZodType<T>): Promise<T> {
 
 export function fetchApiFootballFixtures(leagueId: number, season: number) {
   return request(`fixtures?league=${leagueId}&season=${season}`, z.array(fixtureSchema).max(5_000));
+}
+
+export function fetchApiFootballFixturesByDate(date: string) {
+  return request(`fixtures?date=${encodeURIComponent(date)}`, z.array(fixtureSchema).max(5_000));
 }
 
 export function fetchApiFootballEvents(fixtureId: number) {

@@ -25,3 +25,11 @@ export function hasUnsupportedClaims(text: string): boolean {
     text
   );
 }
+
+export function withDetailsNotice(explanation: string, hasDetails: boolean): string {
+  if (!hasDetails) return explanation;
+  return explanation.replace(
+    /Без событийных данных[^.]*\./iu,
+    "Подтверждённая расширенная статистика приведена ниже."
+  );
+}

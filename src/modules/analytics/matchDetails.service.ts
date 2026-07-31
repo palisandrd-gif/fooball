@@ -1,5 +1,11 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma.js";
 import { externalMatchScore, isLikelySameMatch } from "../../utils/externalMatch.js";
+import { fetchApiFootballFixturesByDate } from "../apiFootball/apiFootball.fetcher.js";
+import {
+  hydrateApiFootballFixture,
+  upsertApiFootballFixture
+} from "../apiFootball/apiFootball.sync.js";
 
 const API_STAT_LABELS: Record<string, string> = {
   "Shots on Goal": "Удары в створ",
@@ -24,31 +30,74 @@ function dayBounds(date: Date): { gte: Date; lt: Date } {
   return { gte, lt: new Date(gte.valueOf() + 86_400_000) };
 }
 
-async function apiFootballDetails(match: {
+type MatchForDetails = {
   kickoffAt: Date;
   homeTeam: { name: string; apiFootballId: number | null };
   awayTeam: { name: string; apiFootballId: number | null };
-}): Promise<string | undefined> {
+};
+
+type DetailedApiFixture = Prisma.ApiFootballFixtureGetPayload<{
+  include: { statistics: true; events: true };
+}>;
+
+function apiFixtureScore(match: MatchForDetails, fixture: {
+  homeTeamName: string;
+  awayTeamName: string;
+  homeTeamApiId: number;
+  awayTeamApiId: number;
+}): number {
+  return externalMatchScore(
+    match.homeTeam.name,
+    match.awayTeam.name,
+    fixture.homeTeamName,
+    fixture.awayTeamName
+  ) + (fixture.homeTeamApiId === match.homeTeam.apiFootballId ? 100 : 0)
+    + (fixture.awayTeamApiId === match.awayTeam.apiFootballId ? 100 : 0);
+}
+
+async function loadApiFixture(match: MatchForDetails): Promise<DetailedApiFixture | undefined> {
   const candidates = await prisma.apiFootballFixture.findMany({
     where: { kickoffAt: dayBounds(match.kickoffAt) },
     include: { statistics: true, events: { orderBy: [{ elapsed: "asc" }, { extra: "asc" }] } },
     take: 30
   });
   const selected = candidates
-    .map((fixture) => ({
-      fixture,
+    .map((fixture) => ({ fixture, score: apiFixtureScore(match, fixture) }))
+    .sort((a, b) => b.score - a.score)[0];
+  return selected && isLikelySameMatch(selected.score) ? selected.fixture : undefined;
+}
+
+async function fetchAndCacheApiFixture(match: MatchForDetails): Promise<DetailedApiFixture | undefined> {
+  const date = match.kickoffAt.toISOString().slice(0, 10);
+  const inputs = await fetchApiFootballFixturesByDate(date);
+  const selected = inputs
+    .map((input) => ({
+      input,
       score: externalMatchScore(
         match.homeTeam.name,
         match.awayTeam.name,
-        fixture.homeTeamName,
-        fixture.awayTeamName
-      ) + (fixture.homeTeamApiId === match.homeTeam.apiFootballId ? 100 : 0)
-        + (fixture.awayTeamApiId === match.awayTeam.apiFootballId ? 100 : 0)
+        input.teams.home.name,
+        input.teams.away.name
+      )
     }))
     .sort((a, b) => b.score - a.score)[0];
   if (!selected || !isLikelySameMatch(selected.score)) return undefined;
+  await upsertApiFootballFixture(selected.input);
+  return loadApiFixture(match);
+}
 
-  const fixture = selected.fixture;
+async function apiFootballDetails(match: MatchForDetails): Promise<string | undefined> {
+  let fixture = await loadApiFixture(match);
+  try {
+    fixture ??= await fetchAndCacheApiFixture(match);
+    if (fixture && !fixture.detailsFetchedAt) {
+      await hydrateApiFootballFixture(fixture.id, fixture.fixtureId);
+      fixture = await loadApiFixture(match);
+    }
+  } catch {
+    // A provider quota or temporary outage must not break the score-only fallback.
+  }
+  if (!fixture) return undefined;
   const homeStats = new Map(
     fixture.statistics
       .filter((stat) => stat.teamApiId === fixture.homeTeamApiId)

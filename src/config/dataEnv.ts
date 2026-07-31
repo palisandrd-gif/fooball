@@ -23,6 +23,7 @@ const dataEnvSchema = z.object({
   API_FOOTBALL_LEAGUE_IDS: z.string().default("39,78,140,135,61"),
   API_FOOTBALL_SEASONS: z.string().default("2025,2026"),
   API_FOOTBALL_DETAIL_LIMIT: z.coerce.number().int().min(0).max(40).default(15),
+  API_FOOTBALL_MIN_INTERVAL_MS: z.coerce.number().int().min(1_000).max(60_000).default(6_500),
   THESPORTSDB_API_KEY: z.string().min(1).optional(),
   THESPORTSDB_BASE_URL: z.string().url().default("https://www.thesportsdb.com/api/v1/json"),
   THESPORTSDB_SYNC_LIMIT: z.coerce.number().int().min(1).max(100).default(20),
