@@ -17,7 +17,7 @@ export async function showSubscription(ctx: BotContext) {
       "• избранные команды",
       "",
       "Coach — скоро",
-      "Расширенные события, карты ударов, сети передач и отчёты появятся в следующей версии.",
+      "Расширенные события и статистика уже тестируются; карты ударов, сети передач и отчёты появятся в следующей версии.",
       "",
       "На этапе MVP тариф меняет администратор."
     ].join("\n")
@@ -32,9 +32,12 @@ export async function showSources(ctx: BotContext) {
       "Fixture and result data from openfootball/football.json",
       "",
       "Data source: StatsBomb Open Data",
-      "Для части турниров доступны расширенные данные StatsBomb. Глубокая аналитика появится в следующей версии.",
+      "Для части турниров доступны события, составы и xG StatsBomb.",
       "",
-      "MatchMind Bot не является официальным продуктом StatsBomb."
+      "Current match statistics: API-Football",
+      "Team profiles and artwork: TheSportsDB",
+      "",
+      "MatchMind Bot не является официальным продуктом перечисленных поставщиков."
     ].join("\n")
   );
 }

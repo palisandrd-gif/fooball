@@ -21,6 +21,8 @@ enum MatchStatus {
 enum DataSource {
   OPENFOOTBALL
   STATSBOMB
+  API_FOOTBALL
+  THESPORTSDB
 }
 
 enum SyncStatus {
@@ -30,27 +32,27 @@ enum SyncStatus {
 }
 
 model User {
-  id          String         @id @default(cuid())
-  telegramId  BigInt         @unique
-  username    String?
-  firstName   String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id           String         @id @default(cuid())
+  telegramId   BigInt         @unique
+  username     String?
+  firstName    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   subscription Subscription?
-  dailyUsage  DailyUsage[]
-  favorites   FavoriteTeam[]
-  auditLogs   AuditLog[]
+  dailyUsage   DailyUsage[]
+  favorites    FavoriteTeam[]
+  auditLogs    AuditLog[]
 }
 
 model Subscription {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  plan      PlanType @default(FREE)
-  startsAt  DateTime @default(now())
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  plan      PlanType  @default(FREE)
+  startsAt  DateTime  @default(now())
   expiresAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DailyUsage {
@@ -67,14 +69,14 @@ model DailyUsage {
 }
 
 model League {
-  id           String   @id @default(cuid())
-  code         String   @unique
-  name         String
-  country      String
-  source       DataSource @default(OPENFOOTBALL)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  seasons      Season[]
+  id        String     @id @default(cuid())
+  code      String     @unique
+  name      String
+  country   String
+  source    DataSource @default(OPENFOOTBALL)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  seasons   Season[]
 }
 
 model Season {
@@ -93,15 +95,23 @@ model Season {
 }
 
 model Team {
-  id             String         @id @default(cuid())
-  name           String
-  normalizedName String         @unique
-  country        String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  homeMatches    Match[]        @relation("HomeTeam")
-  awayMatches    Match[]        @relation("AwayTeam")
-  favorites      FavoriteTeam[]
+  id                   String         @id @default(cuid())
+  name                 String
+  normalizedName       String         @unique
+  country              String?
+  apiFootballId        Int?           @unique
+  theSportsDbId        String?        @unique
+  theSportsDbCheckedAt DateTime?
+  badgeUrl             String?
+  stadium              String?
+  stadiumThumbUrl      String?
+  websiteUrl           String?
+  description          String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  homeMatches          Match[]        @relation("HomeTeam")
+  awayMatches          Match[]        @relation("AwayTeam")
+  favorites            FavoriteTeam[]
 
   @@index([name])
 }
@@ -152,37 +162,145 @@ model FavoriteTeam {
 }
 
 model StatsBombCompetition {
-  id              String   @id @default(cuid())
+  id              String           @id @default(cuid())
   competitionId   Int
   seasonId        Int
   competitionName String
   seasonName      String
   countryName     String?
   matchAvailable  DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   matches         StatsBombMatch[]
 
   @@unique([competitionId, seasonId])
 }
 
 model StatsBombMatch {
-  id            String   @id @default(cuid())
-  statsBombId   Int      @unique
+  id              String                  @id @default(cuid())
+  statsBombId     Int                     @unique
   competitionDbId String
-  matchDate     DateTime
-  kickOff       String?
-  homeTeam      String
-  awayTeam      String
-  homeScore     Int?
-  awayScore     Int?
-  matchWeek     Int?
-  stadium       String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  competition   StatsBombCompetition @relation(fields: [competitionDbId], references: [id], onDelete: Cascade)
+  matchDate       DateTime
+  kickOff         String?
+  homeTeam        String
+  awayTeam        String
+  homeScore       Int?
+  awayScore       Int?
+  matchWeek       Int?
+  stadium         String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  competition     StatsBombCompetition    @relation(fields: [competitionDbId], references: [id], onDelete: Cascade)
+  events          StatsBombEvent[]
+  lineup          StatsBombLineupPlayer[]
 
   @@index([competitionDbId, matchDate])
+}
+
+model StatsBombEvent {
+  id               String         @id @default(cuid())
+  statsBombEventId String         @unique
+  matchDbId        String
+  index            Int
+  period           Int
+  minute           Int
+  second           Float
+  type             String
+  possession       Int?
+  teamName         String?
+  playerName       String?
+  passRecipient    String?
+  outcome          String?
+  playPattern      String?
+  shotXg           Float?
+  locationX        Float?
+  locationY        Float?
+  endLocationX     Float?
+  endLocationY     Float?
+  createdAt        DateTime       @default(now())
+  match            StatsBombMatch @relation(fields: [matchDbId], references: [id], onDelete: Cascade)
+
+  @@index([matchDbId, type])
+  @@index([matchDbId, minute])
+}
+
+model StatsBombLineupPlayer {
+  id           String         @id @default(cuid())
+  matchDbId    String
+  teamName     String
+  playerId     Int
+  playerName   String
+  jerseyNumber Int?
+  countryName  String?
+  started      Boolean        @default(false)
+  positionName String?
+  fromMinute   Int?
+  toMinute     Int?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  match        StatsBombMatch @relation(fields: [matchDbId], references: [id], onDelete: Cascade)
+
+  @@unique([matchDbId, teamName, playerId])
+  @@index([matchDbId, teamName])
+}
+
+model ApiFootballFixture {
+  id            String                 @id @default(cuid())
+  fixtureId     Int                    @unique
+  leagueId      Int
+  leagueName    String
+  season        Int
+  round         String?
+  kickoffAt     DateTime
+  status        String
+  homeTeamApiId Int
+  homeTeamName  String
+  awayTeamApiId Int
+  awayTeamName  String
+  homeGoals     Int?
+  awayGoals     Int?
+  venueName     String?
+  referee       String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  events        ApiFootballEvent[]
+  statistics    ApiFootballStatistic[]
+
+  @@index([leagueId, season, kickoffAt])
+  @@index([homeTeamApiId, kickoffAt])
+  @@index([awayTeamApiId, kickoffAt])
+}
+
+model ApiFootballEvent {
+  id          String             @id @default(cuid())
+  fixtureDbId String
+  elapsed     Int
+  extra       Int?
+  teamApiId   Int
+  teamName    String
+  playerName  String?
+  assistName  String?
+  type        String
+  detail      String
+  createdAt   DateTime           @default(now())
+  fixture     ApiFootballFixture @relation(fields: [fixtureDbId], references: [id], onDelete: Cascade)
+
+  @@index([fixtureDbId, elapsed])
+}
+
+model ApiFootballStatistic {
+  id          String             @id @default(cuid())
+  fixtureDbId String
+  teamApiId   Int
+  teamName    String
+  type        String
+  value       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  fixture     ApiFootballFixture @relation(fields: [fixtureDbId], references: [id], onDelete: Cascade)
+
+  @@unique([fixtureDbId, teamApiId, type])
+  @@index([fixtureDbId, teamApiId])
 }
 
 model DataSyncLog {

@@ -5,13 +5,17 @@ import { logger } from "../utils/logger.js";
 import {
   adminCommand,
   setPlanCommand,
+  syncApiFootballCommand,
   syncOpenFootballCommand,
-  syncStatsBombCommand
+  syncStatsBombCommand,
+  syncStatsBombDetailsCommand,
+  syncTheSportsDbCommand
 } from "./commands/admin.js";
 import { helpCommand } from "./commands/help.js";
 import { myPlanCommand } from "./commands/myplan.js";
 import { startCommand } from "./commands/start.js";
 import { explainHelp, explainMatch } from "./handlers/explainMatch.js";
+import { showMatchDetails } from "./handlers/matchDetails.js";
 import { removeFavorite, showFavorites } from "./handlers/favorites.js";
 import {
   beginHistory,
@@ -48,6 +52,9 @@ bot.command("admin", adminCommand);
 bot.command("setplan", setPlanCommand);
 bot.command("sync_openfootball", syncOpenFootballCommand);
 bot.command("sync_statsbomb_basic", syncStatsBombCommand);
+bot.command("sync_statsbomb_details", syncStatsBombDetailsCommand);
+bot.command("sync_api_football", syncApiFootballCommand);
+bot.command("sync_thesportsdb", syncTheSportsDbCommand);
 
 bot.hears("⚽ Найти команду", beginTeamSearch);
 bot.hears("📅 Расписание", beginSchedule);
@@ -79,6 +86,10 @@ bot.action(/^results:(.+)$/, async (ctx) => {
 bot.action(/^explain:(.+)$/, async (ctx) => {
   await ctx.answerCbQuery();
   await explainMatch(ctx, ctx.match[1]);
+});
+bot.action(/^details:(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  await showMatchDetails(ctx, ctx.match[1]);
 });
 bot.action(/^h2h1:(.+)$/, async (ctx) => {
   await ctx.answerCbQuery();

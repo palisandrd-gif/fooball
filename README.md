@@ -19,14 +19,16 @@ commands + handlers
           Prisma ORM / PostgreSQL
                 ▲
                 │
-     OpenFootball + StatsBomb basic
+ OpenFootball + StatsBomb + API-Football + TheSportsDB
 ```
 
 Основные принципы:
 
 - интерфейс Telegram не показывает пользователю технические детали;
 - OpenFootball — основной источник расписаний и результатов;
-- StatsBomb MVP импортирует только список турниров и матчи;
+- StatsBomb импортирует матчи, события и составы для ограниченной выборки;
+- API-Football дополняет актуальные матчи событиями и командной статистикой;
+- TheSportsDB добавляет логотипы, стадионы и ссылки на сайты команд;
 - AI получает только команды, дату, лигу и счёт;
 - при отсутствии OpenAI API используется локальное безопасное объяснение;
 - Free и Pro ограничиваются дневными лимитами;
@@ -66,7 +68,8 @@ Prisma-схема находится в `src/db/schema.prisma` и включае
 - `User`, `Subscription`, `DailyUsage`;
 - `League`, `Season`, `Team`, `Match`, `MatchResult`;
 - `FavoriteTeam`;
-- `StatsBombCompetition`, `StatsBombMatch`;
+- `StatsBombCompetition`, `StatsBombMatch`, `StatsBombEvent`, `StatsBombLineupPlayer`;
+- `ApiFootballFixture`, `ApiFootballEvent`, `ApiFootballStatistic`;
 - `DataSyncLog`, `AuditLog`.
 
 Данные матчей нормализованы. Сырой JSON не используется как основной формат хранения.
@@ -93,6 +96,9 @@ Prisma-схема находится в `src/db/schema.prisma` и включае
 - `/setplan telegram_id pro`
 - `/sync_openfootball`
 - `/sync_statsbomb_basic`
+- `/sync_statsbomb_details [match_id]`
+- `/sync_api_football`
+- `/sync_thesportsdb`
 
 ## Быстрый запуск
 
@@ -124,6 +130,15 @@ ADMIN_TELEGRAM_IDS=ваш_telegram_id
 
 Несколько администраторов указываются через запятую. `OPENAI_API_KEY` необязателен: без него бот использует безопасное объяснение по счёту.
 
+Для расширенных источников добавьте полученные у поставщиков ключи:
+
+```dotenv
+API_FOOTBALL_KEY=ваш_ключ_api_football
+THESPORTSDB_API_KEY=ваш_ключ_thesportsdb
+```
+
+Если ключ не указан, бот продолжает работать на OpenFootball и StatsBomb; соответствующая синхронизация просто недоступна.
+
 4. Запустите PostgreSQL:
 
 ```bash
@@ -142,9 +157,24 @@ npm run prisma:migrate -- --name init
 ```bash
 npm run sync:openfootball
 npm run sync:statsbomb
+npm run sync:statsbomb-details
+npm run sync:api-football
+npm run sync:thesportsdb
 ```
 
 StatsBomb содержит много открытых соревнований, поэтому базовая синхронизация может занять несколько минут.
+
+Расширенная синхронизация StatsBomb по умолчанию обрабатывает 10 последних матчей без событий. Для конкретного матча можно передать его StatsBomb ID:
+
+```bash
+npm run sync:statsbomb-details -- 123456
+```
+
+API-Football по умолчанию загружает сезоны `2025` и `2026` для пяти ведущих европейских лиг. Параметры `API_FOOTBALL_LEAGUE_IDS`, `API_FOOTBALL_SEASONS` и `API_FOOTBALL_DETAIL_LIMIT` управляют покрытием и расходом дневного лимита. TheSportsDB обрабатывает до 20 ещё не проверенных команд за один запуск.
+
+## Расширенная информация о матчах
+
+После синхронизации под последним матчем команды появляется кнопка «📊 Подробности матча». Бот сначала ищет актуальные показатели API-Football, затем использует StatsBomb Open Data как резервный источник. В ответ могут входить удары, владение, угловые, карточки, xG, ключевые события и стартовые составы — только если соответствующие факты сохранены в базе.
 
 7. Запустите бота:
 
@@ -226,6 +256,8 @@ npm run cron:openfootball
 Расписание `15 3 * * *` запускает импорт каждый день в 03:15 UTC. Cron-службе нужны только `DATABASE_URL` и, при необходимости, `OPENFOOTBALL_BASE_URL`; Telegram- и OpenAI-секреты ей не передаются.
 
 Пошаговая настройка: [`docs/RAILWAY_CRON.md`](docs/RAILWAY_CRON.md).
+
+Настройка StatsBomb events, API-Football и TheSportsDB: [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md).
 
 ## План реализации на 14 дней
 
