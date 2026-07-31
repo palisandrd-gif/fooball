@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../db/prisma.js";
 import { logger } from "../../utils/logger.js";
 import { externalMatchScore, isLikelySameMatch } from "../../utils/externalMatch.js";
+import { teamSearchScore } from "../../utils/teamAliases.js";
 import {
   fetchApiFootballFixturesByDate,
   fetchApiFootballFixturesByTeam,
@@ -55,14 +56,14 @@ type DetailedApiFixture = Prisma.ApiFootballFixtureGetPayload<{
   include: { statistics: true; events: true };
 }>;
 
-type ApiFixtureCandidate = {
+type FixtureNames = {
   homeTeamName: string;
   awayTeamName: string;
   homeTeamApiId: number;
   awayTeamApiId: number;
 };
 
-function apiFixtureScore(match: MatchForDetails, fixture: ApiFixtureCandidate): number {
+function namesScore(match: MatchForDetails, fixture: FixtureNames): number {
   return externalMatchScore(
     match.homeTeam.name,
     match.awayTeam.name,
@@ -72,9 +73,9 @@ function apiFixtureScore(match: MatchForDetails, fixture: ApiFixtureCandidate): 
     + (fixture.awayTeamApiId === match.awayTeam.apiFootballId ? 100 : 0);
 }
 
-function bestFixture(match: MatchForDetails, fixtures: ApiFixtureCandidate[]): ApiFixtureCandidate | undefined {
+function selectFixtureNames(match: MatchForDetails, fixtures: FixtureNames[]): FixtureNames | undefined {
   const selected = fixtures
-    .map((fixture) => ({ fixture, score: apiFixtureScore(match, fixture) }))
+    .map((fixture) => ({ fixture, score: namesScore(match, fixture) }))
     .sort((a, b) => b.score - a.score)[0];
   return selected && isLikelySameMatch(selected.score) ? selected.fixture : undefined;
 }
@@ -88,19 +89,10 @@ async function loadApiFixture(match: MatchForDetails): Promise<DetailedApiFixtur
     include: { statistics: true, events: { orderBy: [{ elapsed: "asc" }, { extra: "asc" }] } },
     take: 100
   });
-  const selected = bestFixture(match, candidates);
-  return selected ? candidates.find((fixture) => fixture.fixtureId === (selected as { fixtureId?: number }).fixtureId) :
-    candidates
-      .map((fixture) => ({ fixture, score: apiFixtureScore(match, fixture) }))
-      .sort((a, b) => b.score - a.score)[0]?.score && isLikelySameMatch(
-        candidates
-          .map((fixture) => ({ fixture, score: apiFixtureScore(match, fixture) }))
-          .sort((a, b) => b.score - a.score)[0]?.score ?? 0
-      )
-      ? candidates
-          .map((fixture) => ({ fixture, score: apiFixtureScore(match, fixture) }))
-          .sort((a, b) => b.score - a.score)[0]?.fixture
-      : undefined;
+  const selected = candidates
+    .map((fixture) => ({ fixture, score: namesScore(match, fixture) }))
+    .sort((a, b) => b.score - a.score)[0];
+  return selected && isLikelySameMatch(selected.score) ? selected.fixture : undefined;
 }
 
 async function fetchAndCacheApiFixture(match: MatchForDetails): Promise<DetailedApiFixture | undefined> {
@@ -108,15 +100,16 @@ async function fetchAndCacheApiFixture(match: MatchForDetails): Promise<Detailed
   try {
     for (const date of dates) {
       const fixtures = await fetchApiFootballFixturesByDate(date);
-      const selected = bestFixture(match, fixtures.map((input) => ({
+      const selected = selectFixtureNames(match, fixtures.map((input) => ({
         homeTeamName: input.teams.home.name,
         awayTeamName: input.teams.away.name,
         homeTeamApiId: input.teams.home.id,
         awayTeamApiId: input.teams.away.id
       })));
       if (selected) {
-        const input = fixtures.find((item) => item.fixture.id === selected.homeTeamApiId ||
-          (item.teams.home.id === selected.homeTeamApiId && item.teams.away.id === selected.awayTeamApiId));
+        const input = fixtures.find((item) =>
+          item.teams.home.id === selected.homeTeamApiId && item.teams.away.id === selected.awayTeamApiId
+        );
         if (input) {
           await upsertApiFootballFixture(input);
           return loadApiFixture(match);
@@ -124,29 +117,31 @@ async function fetchAndCacheApiFixture(match: MatchForDetails): Promise<Detailed
       }
     }
 
-    // Some API-Football plans/providers index fixtures more reliably by team
-    // than by date. Resolve a team ID and search a narrow date range as fallback.
+    // Some provider indexes are more reliable by team than by date.
     const teamIds = [...new Set([
       match.homeTeam.apiFootballId,
       match.awayTeam.apiFootballId
     ].filter((id): id is number => id !== null))];
-    for (const teamName of [match.homeTeam.name, match.awayTeam.name]) {
-      if (!teamIds.length) {
+
+    if (!teamIds.length) {
+      for (const teamName of [match.homeTeam.name, match.awayTeam.name]) {
         const teams = await fetchApiFootballTeams(teamName);
-        for (const item of teams) {
-          if (externalMatchScore(teamName, item.team.name, item.team.name, teamName) >= 75) {
-            teamIds.push(item.team.id);
-          }
-        }
+        const selected = teams
+          .map((item) => ({ id: item.team.id, score: teamSearchScore(teamName, item.team.name) }))
+          .filter((item) => item.score >= 75)
+          .sort((a, b) => b.score - a.score)[0];
+        if (selected) teamIds.push(selected.id);
+        if (teamIds.length) break;
       }
     }
+
     for (const teamId of [...new Set(teamIds)]) {
       const fixtures = await fetchApiFootballFixturesByTeam(
         teamId,
         dateString(shiftUtcDate(match.kickoffAt, -1)),
         dateString(shiftUtcDate(match.kickoffAt, 1))
       );
-      const selected = bestFixture(match, fixtures.map((input) => ({
+      const selected = selectFixtureNames(match, fixtures.map((input) => ({
         homeTeamName: input.teams.home.name,
         awayTeamName: input.teams.away.name,
         homeTeamApiId: input.teams.home.id,
@@ -183,12 +178,12 @@ async function apiFootballDetails(match: MatchForDetails): Promise<string | unde
 
   const homeStats = new Map(
     fixture.statistics
-      .filter((stat) => stat.teamApiId === fixture!.homeTeamApiId)
+      .filter((stat) => stat.teamApiId === fixture.homeTeamApiId)
       .map((stat) => [stat.type, stat.value])
   );
   const awayStats = new Map(
     fixture.statistics
-      .filter((stat) => stat.teamApiId === fixture!.awayTeamApiId)
+      .filter((stat) => stat.teamApiId === fixture.awayTeamApiId)
       .map((stat) => [stat.type, stat.value])
   );
   const stats = Object.entries(API_STAT_LABELS)
