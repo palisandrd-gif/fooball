@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlanType {
+  FREE
+  PRO
+  COACH
+}
+
+enum MatchStatus {
+  SCHEDULED
+  FINISHED
+}
+
+enum DataSource {
+  OPENFOOTBALL
+  STATSBOMB
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id          String         @id @default(cuid())
+  telegramId  BigInt         @unique
+  username    String?
+  firstName   String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  subscription Subscription?
+  dailyUsage  DailyUsage[]
+  favorites   FavoriteTeam[]
+  auditLogs   AuditLog[]
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  plan      PlanType @default(FREE)
+  startsAt  DateTime @default(now())
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  day       DateTime
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([day])
+}
+
+model League {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  country      String
+  source       DataSource @default(OPENFOOTBALL)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  seasons      Season[]
+}
+
+model Season {
+  id        String   @id @default(cuid())
+  leagueId  String
+  name      String
+  startYear Int
+  endYear   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  league    League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  matches   Match[]
+
+  @@unique([leagueId, name])
+  @@index([startYear, endYear])
+}
+
+model Team {
+  id             String         @id @default(cuid())
+  name           String
+  normalizedName String         @unique
+  country        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  homeMatches    Match[]        @relation("HomeTeam")
+  awayMatches    Match[]        @relation("AwayTeam")
+  favorites      FavoriteTeam[]
+
+  @@index([name])
+}
+
+model Match {
+  id          String       @id @default(cuid())
+  externalKey String       @unique
+  seasonId    String
+  homeTeamId  String
+  awayTeamId  String
+  kickoffAt   DateTime
+  round       String?
+  status      MatchStatus  @default(SCHEDULED)
+  source      DataSource   @default(OPENFOOTBALL)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  season      Season       @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  homeTeam    Team         @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    Team         @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  result      MatchResult?
+
+  @@index([seasonId, kickoffAt])
+  @@index([homeTeamId, kickoffAt])
+  @@index([awayTeamId, kickoffAt])
+}
+
+model MatchResult {
+  id        String   @id @default(cuid())
+  matchId   String   @unique
+  homeGoals Int
+  awayGoals Int
+  halfHome  Int?
+  halfAway  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
+
+model FavoriteTeam {
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+}
+
+model StatsBombCompetition {
+  id              String   @id @default(cuid())
+  competitionId   Int
+  seasonId        Int
+  competitionName String
+  seasonName      String
+  countryName     String?
+  matchAvailable  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  matches         StatsBombMatch[]
+
+  @@unique([competitionId, seasonId])
+}
+
+model StatsBombMatch {
+  id            String   @id @default(cuid())
+  statsBombId   Int      @unique
+  competitionDbId String
+  matchDate     DateTime
+  kickOff       String?
+  homeTeam      String
+  awayTeam      String
+  homeScore     Int?
+  awayScore     Int?
+  matchWeek     Int?
+  stadium       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  competition   StatsBombCompetition @relation(fields: [competitionDbId], references: [id], onDelete: Cascade)
+
+  @@index([competitionDbId, matchDate])
+}
+
+model DataSyncLog {
+  id          String     @id @default(cuid())
+  source      DataSource
+  status      SyncStatus
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
+  records     Int        @default(0)
+  message     String?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+}
