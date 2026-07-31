@@ -247,26 +247,27 @@ model StatsBombLineupPlayer {
 }
 
 model ApiFootballFixture {
-  id            String                 @id @default(cuid())
-  fixtureId     Int                    @unique
-  leagueId      Int
-  leagueName    String
-  season        Int
-  round         String?
-  kickoffAt     DateTime
-  status        String
-  homeTeamApiId Int
-  homeTeamName  String
-  awayTeamApiId Int
-  awayTeamName  String
-  homeGoals     Int?
-  awayGoals     Int?
-  venueName     String?
-  referee       String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  events        ApiFootballEvent[]
-  statistics    ApiFootballStatistic[]
+  id               String                 @id @default(cuid())
+  fixtureId        Int                    @unique
+  leagueId         Int
+  leagueName       String
+  season           Int
+  round            String?
+  kickoffAt        DateTime
+  status           String
+  homeTeamApiId    Int
+  homeTeamName     String
+  awayTeamApiId    Int
+  awayTeamName     String
+  homeGoals        Int?
+  awayGoals        Int?
+  venueName        String?
+  referee          String?
+  detailsFetchedAt DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  events           ApiFootballEvent[]
+  statistics       ApiFootballStatistic[]
 
   @@index([leagueId, season, kickoffAt])
   @@index([homeTeamApiId, kickoffAt])

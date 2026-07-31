@@ -1,5 +1,7 @@
 import { aiService } from "../../modules/ai/ai.service.js";
+import { withDetailsNotice } from "../../modules/ai/aiSafety.js";
 import { matchSummaryService } from "../../modules/analytics/matchSummary.service.js";
+import { matchDetailsService } from "../../modules/analytics/matchDetails.service.js";
 import { consumeRequest } from "../helpers.js";
 import { BotContext } from "../types.js";
 
@@ -18,7 +20,15 @@ export async function explainMatch(ctx: BotContext, matchId: string) {
     date: match.kickoffAt.toISOString().slice(0, 10),
     league: match.season.league.name
   });
-  await ctx.reply(`🧠 ${explanation}\n\nИсточник результата: openfootball/football.json`);
+  const details = await matchDetailsService.forMatch(matchId);
+  const visibleExplanation = withDetailsNotice(explanation, Boolean(details));
+  await ctx.reply(
+    [
+      `🧠 ${visibleExplanation}`,
+      "Источник результата: openfootball/football.json",
+      details
+    ].filter(Boolean).join("\n\n").slice(0, 4096)
+  );
 }
 
 export async function explainHelp(ctx: BotContext) {
