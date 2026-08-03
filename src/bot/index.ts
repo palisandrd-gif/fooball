@@ -169,9 +169,14 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 async function launchBot() {
-  await registerBotCommands(bot);
   await bot.launch({ dropPendingUpdates: true });
   logger.info("MatchMind Bot started");
+
+  // Command menu registration must never delay long polling. Telegram can
+  // rate-limit or stall setMyCommands while the bot itself remains healthy.
+  void registerBotCommands(bot).then(() => {
+    logger.info("Telegram slash commands registered");
+  });
 }
 
 void launchBot().catch((error) => {
