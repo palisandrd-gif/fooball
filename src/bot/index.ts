@@ -12,6 +12,7 @@ import {
   syncTheSportsDbCommand
 } from "./commands/admin.js";
 import { helpCommand } from "./commands/help.js";
+import { registerBotCommands } from "./commands/commandMenu.js";
 import { myPlanCommand } from "./commands/myplan.js";
 import { startCommand } from "./commands/start.js";
 import { explainHelp, explainMatch } from "./handlers/explainMatch.js";
@@ -167,6 +168,12 @@ async function shutdown(signal: string) {
 process.once("SIGINT", () => void shutdown("SIGINT"));
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
-bot.launch({ dropPendingUpdates: true }).then(() => {
+async function launchBot() {
+  await registerBotCommands(bot);
+  await bot.launch({ dropPendingUpdates: true });
   logger.info("MatchMind Bot started");
+}
+
+void launchBot().catch((error) => {
+  logger.fatal({ error }, "Failed to start MatchMind Bot");
 });
