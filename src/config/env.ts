@@ -17,7 +17,8 @@ const envSchema = z.object({
       "ADMIN_TELEGRAM_IDS must contain comma-separated numeric IDs"
     ),
   FREE_DAILY_LIMIT: z.coerce.number().int().positive().default(5),
-  PRO_DAILY_LIMIT: z.coerce.number().int().positive().default(100)
+  PRO_DAILY_LIMIT: z.coerce.number().int().positive().default(100),
+  COACH_DAILY_LIMIT: z.coerce.number().int().positive().default(500)
 });
 
 export const env = { ...dataEnv, ...envSchema.parse(process.env) };

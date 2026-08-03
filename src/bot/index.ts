@@ -15,6 +15,14 @@ import { helpCommand } from "./commands/help.js";
 import { myPlanCommand } from "./commands/myplan.js";
 import { startCommand } from "./commands/start.js";
 import { explainHelp, explainMatch } from "./handlers/explainMatch.js";
+import {
+  beginCoachQuery,
+  handleCoachText,
+  selectCoachTeam,
+  showCoachAbout,
+  showCoachMatch,
+  showCoachMenu
+} from "./handlers/coach.js";
 import { showMatchDetails } from "./handlers/matchDetails.js";
 import { removeFavorite, showFavorites } from "./handlers/favorites.js";
 import {
@@ -48,6 +56,7 @@ bot.command("favorites", showFavorites);
 bot.command("subscribe", showSubscription);
 bot.command("sources", showSources);
 bot.command("explain", explainHelp);
+bot.command("coach", showCoachMenu);
 bot.command("admin", adminCommand);
 bot.command("setplan", setPlanCommand);
 bot.command("sync_openfootball", syncOpenFootballCommand);
@@ -62,6 +71,7 @@ bot.hears("📊 Последние результаты", beginResults);
 bot.hears("🔎 История матчей", beginHistory);
 bot.hears("🧠 Объяснить матч", explainHelp);
 bot.hears("⭐ Избранные команды", showFavorites);
+bot.hears("🎯 Coach-аналитика", showCoachMenu);
 bot.hears("💳 Подписка", showSubscription);
 bot.hears("ℹ️ Источники данных", showSources);
 
@@ -91,6 +101,34 @@ bot.action(/^details:(.+)$/, async (ctx) => {
   await ctx.answerCbQuery();
   await showMatchDetails(ctx, ctx.match[1]);
 });
+bot.action("coach:team", async (ctx) => {
+  await ctx.answerCbQuery();
+  await beginCoachQuery(ctx, "team");
+});
+bot.action("coach:match", async (ctx) => {
+  await ctx.answerCbQuery();
+  await beginCoachQuery(ctx, "match");
+});
+bot.action("coach:compare", async (ctx) => {
+  await ctx.answerCbQuery();
+  await beginCoachQuery(ctx, "compare");
+});
+bot.action("coach:form", async (ctx) => {
+  await ctx.answerCbQuery();
+  await beginCoachQuery(ctx, "form");
+});
+bot.action("coach:about", async (ctx) => {
+  await ctx.answerCbQuery();
+  await showCoachAbout(ctx);
+});
+bot.action(/^coach:select:([^:]+):(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  await selectCoachTeam(ctx, ctx.match[1], ctx.match[2]);
+});
+bot.action(/^coach:match:(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  await showCoachMatch(ctx, ctx.match[1]);
+});
 bot.action(/^h2h1:(.+)$/, async (ctx) => {
   await ctx.answerCbQuery();
   const team = await prisma.team.findUnique({ where: { id: ctx.match[1] } });
@@ -108,6 +146,8 @@ bot.on("text", async (ctx) => {
     await handleTeamSearchText(ctx, ctx.message.text);
   } else if (["history_team_one", "history_team_two"].includes(ctx.session.action)) {
     await handleHistoryText(ctx, ctx.message.text);
+  } else if (["coach_team_query", "coach_compare_second"].includes(ctx.session.action)) {
+    await handleCoachText(ctx, ctx.message.text);
   } else {
     await ctx.reply("Выберите действие в меню или используйте /help.");
   }

@@ -1,4 +1,5 @@
 import { BotContext } from "../types.js";
+import { env } from "../../config/env.js";
 
 export async function showSubscription(ctx: BotContext) {
   await ctx.reply(
@@ -6,18 +7,23 @@ export async function showSubscription(ctx: BotContext) {
       "💳 Тарифы MatchMind",
       "",
       "Free",
-      "• 5 запросов в день",
+      `• ${env.FREE_DAILY_LIMIT} запросов в день`,
       "• поиск команды",
       "• результаты и расписание",
       "",
       "Pro",
-      "• 100 запросов в день",
+      `• ${env.PRO_DAILY_LIMIT} запросов в день`,
       "• история встреч",
       "• AI-объяснение",
       "• избранные команды",
       "",
-      "Coach — скоро",
-      "Расширенные события и статистика уже тестируются; карты ударов, сети передач и отчёты появятся в следующей версии.",
+      "Coach",
+      `• ${env.COACH_DAILY_LIMIT} запросов в день`,
+      "• отчёт по форме команды",
+      "• расширенный разбор матча",
+      "• сравнение двух команд",
+      "• безопасный Coach AI",
+      "• карты ударов, сети передач и PDF появятся в следующей версии",
       "",
       "На этапе MVP тариф меняет администратор."
     ].join("\n")
