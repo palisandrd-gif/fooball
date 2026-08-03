@@ -4,6 +4,7 @@ import { logger } from "../../utils/logger.js";
 import { externalMatchScore, isLikelySameMatch } from "../../utils/externalMatch.js";
 import { teamSearchScore } from "../../utils/teamAliases.js";
 import {
+  fetchApiFootballFixtures,
   fetchApiFootballFixturesByDate,
   fetchApiFootballFixturesByTeam,
   fetchApiFootballTeams
@@ -31,6 +32,14 @@ const API_STAT_LABELS: Record<string, string> = {
   "expected_goals": "xG"
 };
 
+const API_FOOTBALL_LEAGUE_IDS: Record<string, number> = {
+  "en.1": 39,
+  "de.1": 78,
+  "es.1": 140,
+  "it.1": 135,
+  "fr.1": 61
+};
+
 function dayBounds(date: Date): { gte: Date; lt: Date } {
   const gte = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   return { gte, lt: new Date(gte.valueOf() + 86_400_000) };
@@ -50,6 +59,7 @@ type MatchForDetails = {
   kickoffAt: Date;
   homeTeam: { name: string; apiFootballId: number | null };
   awayTeam: { name: string; apiFootballId: number | null };
+  season?: { startYear: number; league: { code: string } };
 };
 
 type DetailedApiFixture = Prisma.ApiFootballFixtureGetPayload<{
@@ -98,6 +108,28 @@ async function loadApiFixture(match: MatchForDetails): Promise<DetailedApiFixtur
 async function fetchAndCacheApiFixture(match: MatchForDetails): Promise<DetailedApiFixture | undefined> {
   const dates = [-1, 0, 1].map((offset) => dateString(shiftUtcDate(match.kickoffAt, offset)));
   try {
+    // A league + season request is both more reliable and much cheaper than
+    // probing several global fixture dates on API-Football's free plan.
+    const leagueId = match.season && API_FOOTBALL_LEAGUE_IDS[match.season.league.code];
+    if (leagueId && match.season) {
+      const fixtures = await fetchApiFootballFixtures(leagueId, match.season.startYear);
+      const selected = selectFixtureNames(match, fixtures.map((input) => ({
+        homeTeamName: input.teams.home.name,
+        awayTeamName: input.teams.away.name,
+        homeTeamApiId: input.teams.home.id,
+        awayTeamApiId: input.teams.away.id
+      })));
+      if (selected) {
+        const input = fixtures.find((item) =>
+          item.teams.home.id === selected.homeTeamApiId && item.teams.away.id === selected.awayTeamApiId
+        );
+        if (input) {
+          await upsertApiFootballFixture(input);
+          return loadApiFixture(match);
+        }
+      }
+    }
+
     for (const date of dates) {
       const fixtures = await fetchApiFootballFixturesByDate(date);
       const selected = selectFixtureNames(match, fixtures.map((input) => ({
@@ -262,7 +294,7 @@ export const matchDetailsService = {
   async forMatch(matchId: string): Promise<string | undefined> {
     const match = await prisma.match.findUnique({
       where: { id: matchId },
-      include: { homeTeam: true, awayTeam: true }
+      include: { homeTeam: true, awayTeam: true, season: { include: { league: true } } }
     });
     if (!match) return undefined;
     return (await apiFootballDetails(match)) ?? (await statsBombDetails(match));

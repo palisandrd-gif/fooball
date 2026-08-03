@@ -74,7 +74,12 @@ async function request<T>(path: string, schema: z.ZodType<T>): Promise<T> {
     throw new Error(`API-Football returned an error: ${JSON.stringify(payload.errors).slice(0, 500)}`);
   }
   const parsed = schema.safeParse(payload?.response);
-  if (!parsed.success) throw new Error("API-Football returned an unexpected format");
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new Error(
+      `API-Football returned an unexpected format${issue ? ` at ${issue.path.join(".")}: ${issue.message}` : ""}`
+    );
+  }
   return parsed.data;
 }
 

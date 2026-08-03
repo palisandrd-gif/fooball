@@ -7,6 +7,16 @@ describe("external match linking", () => {
     expect(isLikelySameMatch(score)).toBe(true);
   });
 
+  it("links the reported Crystal Palace vs Arsenal fixture", () => {
+    const score = externalMatchScore(
+      "Crystal Palace FC",
+      "Arsenal FC",
+      "Crystal Palace",
+      "Arsenal"
+    );
+    expect(isLikelySameMatch(score)).toBe(true);
+  });
+
   it("links Russian aliases to provider names", () => {
     const score = externalMatchScore("Бавария", "ПСЖ", "FC Bayern München", "Paris Saint-Germain FC");
     expect(isLikelySameMatch(score)).toBe(true);
