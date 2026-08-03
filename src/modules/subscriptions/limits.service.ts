@@ -4,12 +4,9 @@ import { prisma } from "../../db/prisma.js";
 import { env } from "../../config/env.js";
 import { startOfUtcDay } from "../../utils/date.js";
 import { subscriptionService } from "./subscription.service.js";
+import { buildPlanLimits } from "./planLimits.js";
 
-const planLimit: Record<PlanType, number> = {
-  FREE: env.FREE_DAILY_LIMIT,
-  PRO: env.PRO_DAILY_LIMIT,
-  COACH: env.PRO_DAILY_LIMIT
-};
+const planLimit = buildPlanLimits(env);
 
 export class LimitExceededError extends Error {
   constructor(public readonly limit: number) {

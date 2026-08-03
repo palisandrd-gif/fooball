@@ -222,11 +222,12 @@ async function apiFootballDetails(match: MatchForDetails): Promise<string | unde
     .filter(([type]) => homeStats.has(type) || awayStats.has(type))
     .map(([type, label]) => `${label}: ${homeStats.get(type) ?? "—"} — ${awayStats.get(type) ?? "—"}`);
   const events = fixture.events
-    .filter((event) => ["Goal", "Card"].includes(event.type))
+    .filter((event) => ["Goal", "Card", "subst"].includes(event.type))
     .slice(0, 12)
     .map((event) => {
       const minute = `${event.elapsed}${event.extra ? `+${event.extra}` : ""}′`;
-      return `${minute} ${event.type === "Goal" ? "⚽" : "🟨"} ${event.playerName ?? event.teamName} — ${event.detail ?? ""}`.trim();
+      const icon = event.type === "Goal" ? "⚽" : event.type === "Card" ? "🟨" : "🔄";
+      return `${minute} ${icon} ${event.playerName ?? event.teamName} — ${event.detail ?? ""}`.trim();
     });
 
   return [
@@ -263,9 +264,10 @@ async function statsBombDetails(match: {
   const teamStats = (teamName: string) => {
     const events = item.events.filter((event) => event.teamName === teamName);
     const shots = events.filter((event) => event.type === "Shot");
+    const xgShots = shots.filter((event) => event.shotXg !== null);
     return {
       shots: shots.length,
-      xg: shots.reduce((sum, event) => sum + (event.shotXg ?? 0), 0),
+      xg: xgShots.length ? xgShots.reduce((sum, event) => sum + (event.shotXg ?? 0), 0) : undefined,
       passes: events.filter((event) => event.type === "Pass").length
     };
   };
@@ -282,7 +284,9 @@ async function statsBombDetails(match: {
     "📊 Расширенные данные матча",
     `${item.homeTeam} — ${item.awayTeam}`,
     `Удары: ${home.shots} — ${away.shots}`,
-    `xG: ${home.xg.toFixed(2)} — ${away.xg.toFixed(2)}`,
+    home.xg !== undefined || away.xg !== undefined
+      ? `xG: ${home.xg?.toFixed(2) ?? "—"} — ${away.xg?.toFixed(2) ?? "—"}`
+      : undefined,
     `Зафиксированные передачи: ${home.passes} — ${away.passes}`,
     homeStarters.length ? `\nСтартовый состав ${item.homeTeam}: ${homeStarters.join(", ")}` : undefined,
     awayStarters.length ? `\nСтартовый состав ${item.awayTeam}: ${awayStarters.join(", ")}` : undefined,
@@ -297,6 +301,6 @@ export const matchDetailsService = {
       include: { homeTeam: true, awayTeam: true, season: { include: { league: true } } }
     });
     if (!match) return undefined;
-    return (await apiFootballDetails(match)) ?? (await statsBombDetails(match));
+    return (await statsBombDetails(match)) ?? (await apiFootballDetails(match));
   }
 };
