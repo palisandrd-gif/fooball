@@ -1,6 +1,7 @@
 import { DataSource, SyncStatus } from "@prisma/client";
 import { dataEnv } from "../../config/dataEnv.js";
 import { prisma } from "../../db/prisma.js";
+import { logger } from "../../utils/logger.js";
 import { teamSearchScore } from "../../utils/teamAliases.js";
 import { syncLockService } from "../admin/syncLock.service.js";
 import {
@@ -109,7 +110,8 @@ export async function hydrateApiFootballFixture(
       }
     });
     eventsSaved = true;
-  } catch {
+  } catch (error) {
+    logger.warn({ error, fixtureId }, "API-Football events hydration failed");
     // Keep fixture data usable even if the events endpoint is unavailable.
   }
 
@@ -139,7 +141,8 @@ export async function hydrateApiFootballFixture(
       }
     });
     statisticsSaved = true;
-  } catch {
+  } catch (error) {
+    logger.warn({ error, fixtureId }, "API-Football statistics hydration failed");
     // Some fixtures do not expose statistics; events/basic fixture data remain available.
   }
 
