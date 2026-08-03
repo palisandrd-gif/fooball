@@ -14,7 +14,7 @@ export interface StatsBombCompetitionInput {
 export interface StatsBombMatchInput {
   match_id: number;
   match_date: string;
-  kick_off?: string;
+  kick_off?: string | null;
   home_team: { home_team_name: string };
   away_team: { away_team_name: string };
   home_score?: number;
@@ -71,7 +71,7 @@ const competitionSchema: z.ZodType<StatsBombCompetitionInput> = z.object({
 const matchSchema: z.ZodType<StatsBombMatchInput> = z.object({
   match_id: z.number().int(),
   match_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  kick_off: z.string().optional(),
+  kick_off: z.string().nullable().optional(),
   home_team: z.object({ home_team_name: z.string().min(1).max(200) }),
   away_team: z.object({ away_team_name: z.string().min(1).max(200) }),
   home_score: z.number().int().nonnegative().optional(),
